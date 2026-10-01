@@ -70,3 +70,17 @@
 .rev .small{margin:0;font-size:.82rem}
 .card.rv p{font-size:.92rem}
 @media(max-width:800px){.stage{flex-direction:column}.rev{width:100%;max-height:40vh;border-right:0;border-bottom:1px solid var(--line)}}
+.cab{--panel:rgba(11,28,46,.82)}
+.mbtn{display:flex;width:100%;align-items:center;gap:.5rem;background:none;border:0;color:var(--c);font:600 .9rem 'Manrope',sans-serif;cursor:pointer;padding:0;text-align:left}
+.mbtn:disabled{opacity:.55;cursor:default}
+.mbtn .mdl{margin-left:auto;color:var(--muted);font:400 .72rem 'Manrope',sans-serif}
+.mdl2{display:block;margin-top:.3rem;color:var(--muted);font-size:.72rem}
+.ghost[aria-pressed=true]{color:var(--text);border-color:var(--teal)}
+body[data-cab-theme]:not([data-cab-theme=aurora]) .aurora{display:none}
+body[data-cab-theme=sakura]{background:radial-gradient(circle at 80% 12%,rgba(255,183,213,.55),transparent 40%),radial-gradient(circle at 12% 88%,rgba(176,140,255,.45),transparent 45%),linear-gradient(160deg,#2a1240,#4b1d5c 55%,#1a1030)}
+body[data-cab-theme=neon]{background:radial-gradient(circle at 18% 20%,rgba(255,43,214,.4),transparent 40%),radial-gradient(circle at 85% 78%,rgba(0,229,255,.4),transparent 45%),linear-gradient(180deg,#0a0620,#14083a)}
+body[data-cab-theme=fantasy]{background:radial-gradient(circle at 82% 18%,rgba(255,214,102,.32),transparent 40%),radial-gradient(circle at 10% 90%,rgba(60,200,120,.3),transparent 45%),linear-gradient(170deg,#0c1f1a,#16332a)}
+body[data-cab-theme=scifi]{background:radial-gradient(circle at 75% 15%,rgba(43,124,255,.42),transparent 42%),radial-gradient(circle at 15% 85%,rgba(25,227,209,.3),transparent 45%),linear-gradient(180deg,#02060f,#06122a)}
+body[data-cab-theme=history]{background:radial-gradient(circle at 80% 15%,rgba(201,154,59,.35),transparent 42%),linear-gradient(170deg,#241a10,#3a2a18)}
+body[data-cab-theme=noir]{background:radial-gradient(circle at 85% 12%,rgba(255,70,70,.22),transparent 38%),linear-gradient(180deg,#0b0b0f,#1a1a22)}
+body[data-cab-theme=custom]{background:linear-gradient(rgba(6,18,31,.55),rgba(6,18,31,.82)),var(--bgimg,none) center/cover fixed,#06121f}
