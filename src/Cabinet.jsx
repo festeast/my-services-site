@@ -21,7 +21,7 @@ const MASTERS = [
   { id: 'm6', n: 'Мастер остросюжетной прозы', c: '#7be36b', icon: '⚡', p: 'Твой подход: динамика, короткие главы, чёткий конфликт, читатель не должен оторваться.' },
 ]
 const REVIEW_RULE = 'Напиши короткую рецензию-комментарий в духе этого подхода и по его логике. Это ИИ-имитация творческого подхода, а не реальный человек: не называй себя настоящим автором и не приписывай себе чужих цитат. От первого лица, 3-4 предложения, не больше 70 слов: что в тексте работает по твоим принципам, что нет, один главный совет. Отвечай по-русски.'
-const who = (id) => (id === 'me' ? ME : id === 'mod' ? MOD : ADV.find((a) => a.id === id) || MASTERS.find((a) => a.id === id))
+const who = (id) => (id === 'me' ? ME : id === 'mod' ? MOD : id === 'mc' ? CUSTOM : ADV.find((a) => a.id === id) || MASTERS.find((a) => a.id === id))
 const Av = ({ w, size = '' }) => <span className={`av ${size}`} style={{ '--c': w.c }} aria-hidden="true">{w.img ? <img src={w.img} alt="" /> : w.icon}</span>
 const API = 'https://openrouter.ai/api/v1'
 const RULE = 'Ответь ОЧЕНЬ коротко: 2-3 предложения, не больше 60 слов, без вступлений и списков. Только самое ценное и конкретное. Можешь коротко согласиться или возразить другому участнику по имени. Если в [Материале автора] есть фрагменты книги, опирайся на них. Отвечай по-русски.'
@@ -87,7 +87,24 @@ function pickPassages(docs, query) {
   return { text: out.slice(0, 14000), used }
 }
 
-async function stream(key, model, prompt, onText, signal) {
+const THEMES = [['aurora', 'Северное сияние'], ['sakura', 'Аниме: сакура'], ['neon', 'Аниме: неон-город'], ['fantasy', 'Фэнтези'], ['scifi', 'Фантастика'], ['history', 'Историческая проза'], ['noir', 'Детектив'], ['custom', 'Своя картинка']]
+const CUSTOM = { id: 'mc', n: 'Свой мастер', c: '#ffd166', icon: '🧭' }
+// Скорость моделей запоминается: быстрые и стабильные уходят в начало очереди «Авто».
+const stat = () => ls.get('cab_stats', {})
+function note(id, ok, ms) {
+  const st = stat(), r = st[id] || { t: 6000 }
+  r.t = ok ? Math.round(r.t * 0.6 + ms * 0.4) : r.t + 5000
+  st[id] = r; ls.set('cab_stats', st)
+}
+async function stream(key, model, prompt, onText, signal, ttf = 0) {
+  const ac = new AbortController()
+  const fwd = () => ac.abort()
+  signal?.addEventListener('abort', fwd)
+  const timer = ttf ? setTimeout(() => ac.abort(), ttf) : 0
+  try { return await streamRaw(key, model, prompt, (x) => { clearTimeout(timer); onText(x) }, ac.signal) }
+  finally { clearTimeout(timer); signal?.removeEventListener('abort', fwd) }
+}
+async function streamRaw(key, model, prompt, onText, signal) {
   const res = await fetch(`${API}/chat/completions`, {
     method: 'POST', signal,
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}`, 'HTTP-Referer': location.origin },
@@ -153,9 +170,13 @@ export default function Cabinet() {
   const ctl = useRef(null)
   const feed = useRef(null)
   const rot = useRef(0)
+  const [fast, setFast] = useState(() => ls.get('cab_fast', true))
+  const [theme, setTheme] = useState(() => ls.get('cab_theme', 'aurora'))
+  const [custom, setCustom] = useState(() => ls.get('cab_custom', ''))
   const [showRev, setShowRev] = useState(() => innerWidth > 800)
   const [revQ, setRevQ] = useState('')
   const cur = sessions.find((s) => s.id === sid)
+  const masters = [...MASTERS, { ...CUSTOM, p: `Твой подход: ${custom}` }]
 
   useEffect(() => { document.title = 'Кабинет автора' }, [])
   useEffect(() => {
@@ -168,6 +189,17 @@ export default function Cabinet() {
   useEffect(() => { if (!busy) ls.set('cab_sessions', sessions.slice(0, 30)) }, [sessions, busy])
   useEffect(() => { ls.set('cab_notes', notes) }, [notes])
   useEffect(() => { ls.set('cab_lib', lib) }, [lib])
+  useEffect(() => { ls.set('cab_fast', fast) }, [fast])
+  useEffect(() => { ls.set('cab_custom', custom) }, [custom])
+  useEffect(() => {
+    ls.set('cab_theme', theme)
+    document.body.dataset.cabTheme = theme
+    return () => { delete document.body.dataset.cabTheme }
+  }, [theme])
+  useEffect(() => {
+    docGet('bg_img').then((u) => u && document.body.style.setProperty('--bgimg', `url("${u}")`)).catch(() => {})
+    return () => document.body.style.removeProperty('--bgimg')
+  }, [])
   useEffect(() => { ls.set('cab_model', model) }, [model])
   useEffect(() => { feed.current && (feed.current.scrollTop = feed.current.scrollHeight) }, [sessions, sid])
 
@@ -181,6 +213,17 @@ export default function Cabinet() {
   }
   function logout() {
     sessionStorage.removeItem('or_key'); localStorage.removeItem('or_key'); setKey(''); setInput(''); setSid(null)
+  }
+  function onBg(e) {
+    const f = e.target.files?.[0]
+    e.target.value = ''
+    if (!f) return
+    const r = new FileReader()
+    r.onload = async () => {
+      try { await docPut('bg_img', r.result) } catch { /* picture just won't persist */ }
+      document.body.style.setProperty('--bgimg', `url("${r.result}")`); setTheme('custom')
+    }
+    r.readAsDataURL(f)
   }
   async function addDoc(meta, text) {
     await docPut(meta.id, text)
@@ -224,23 +267,26 @@ export default function Cabinet() {
   }
   const toggleDoc = (id) => setSessions((ss) => ss.map((x) => (x.id === sid ? { ...x, docs: (x.docs || []).includes(id) ? x.docs.filter((d) => d !== id) : [...(x.docs || []), id] } : x)))
 
-  // Режим «Авто»: каждая реплика берёт следующую бесплатную модель, а при сбое или лимите пробует соседние.
+  // «Авто»: берутся 4 самые быстрые модели из истории; если модель молчит дольше 15 секунд или сбоит, идём к следующей.
   async function streamAuto(prompt, onText, signal, onModel) {
     const auto = model === 'auto'
-    const list = auto ? models.map((m) => m.id) : [model]
+    const st = stat()
+    const list = auto ? models.map((m) => m.id).sort((a, b) => (st[a]?.t ?? 6000) - (st[b]?.t ?? 6000)).slice(0, 4) : [model]
     if (!list.length) throw new Error('Список бесплатных моделей пока не загрузился.')
     const from = auto ? rot.current++ : 0
     let last
-    for (let k = 0; k < (auto ? Math.min(list.length, 5) : 1); k++) {
-      const id = list[(from + k) % list.length]
+    for (let k = 0; k < list.length; k++) {
+      const id = list[(from + k) % list.length], t0 = Date.now()
       try {
         onModel(id)
-        const t = await stream(key, id, prompt, onText, signal)
-        if (t.trim()) return t
-        last = new Error('Модель ничего не ответила.')
+        const t = await stream(key, id, prompt, onText, signal, auto ? 15000 : 0)
+        if (!t.trim()) throw new Error('Модель ничего не ответила.')
+        note(id, true, Date.now() - t0)
+        return t
       } catch (e) {
-        if (e.name === 'AbortError' || e.status === 401) throw e
-        last = e
+        if (signal.aborted || e.status === 401) throw e
+        note(id, false)
+        last = e.name === 'AbortError' ? new Error('Модель слишком долго молчит.') : e
       }
     }
     throw last
@@ -253,7 +299,7 @@ export default function Cabinet() {
     }
     return out
   }
-  async function runReview() {
+  async function runReview(m) {
     if (busy || !cur) return
     const id = cur.id
     const query = revQ.trim() || [...cur.turns].reverse().find((t) => t.kind === 'q')?.text || cur.title
@@ -265,8 +311,8 @@ export default function Cabinet() {
       const mat = docs.length ? pickPassages(docs, query) : { text: '', used: [] }
       const target = mat.text || query
       if (target.length < 200) throw new Error('Добавьте книгу в материалы или вставьте отрывок (от 200 знаков) в поле рецензий.')
-      setSessions((ss) => ss.map((x) => (x.id === id ? { ...x, reviews: {}, revSrc: mat.used.join('; ') } : x)))
-      for (const m of MASTERS) {
+      setSessions((ss) => ss.map((x) => (x.id === id ? { ...x, revSrc: mat.used.join('; ') } : x)))
+      {
         let cm = ''
         setSpeaking(m.id); setR(m.id, { text: '', m: '' })
         const prompt = `${m.p}\n${REVIEW_RULE}\n\n[О книге автора]\n${notes || 'не указано'}\n[Что рецензировать]\n${target.slice(0, 12000)}\n\nТвоя рецензия:`
@@ -283,16 +329,17 @@ export default function Cabinet() {
     let material = ''
     const upd = (fn) => setSessions((s) => s.map((x) => (x.id === id ? { ...x, turns: fn(x.turns) } : x)))
     const add = (t) => { tr.push(t); upd((ts) => [...ts, t]); return tr.length - 1 }
-    const say = async (w, kind, instr) => {
+    const say = async (w, kind, instr, upto) => {
       const i = add({ who: w, kind, text: '' })
-      setSpeaking(w)
-      const hist = tr.slice(Math.max(0, i - 16), i).filter((t) => t.kind !== 'src').map((t) => `${who(t.who).n}: ${t.text.slice(0, 600)}`).join('\n')
+      setSpeaking(upto !== undefined ? 'all' : w)
+      const u = upto ?? i
+      const hist = tr.slice(Math.max(0, u - 16), u).filter((t) => t.kind !== 'src').map((t) => `${who(t.who).n}: ${t.text.slice(0, 600)}`).join('\n')
       const prompt = `${instr}\n\n[О книге автора]\n${notes || 'не указано'}\n[Материал автора]\n${material || 'нет'}\n[Ход обсуждения]\n${hist}\n\nТвоя реплика (${who(w).n}):`
       try {
         const t = await streamAuto(prompt, (x) => { tr[i].text = x; upd((ts) => { const a = [...ts]; a[i] = { ...a[i], text: x }; return a }) }, ac.signal, (mid) => { tr[i].m = mid; upd((ts) => { const a = [...ts]; a[i] = { ...a[i], m: mid }; return a }) })
         if (!t.trim()) throw new Error('Модель ничего не ответила. Выберите другую модель.')
       } catch (e) {
-        if (!tr[i].text) { tr.pop(); upd((ts) => ts.slice(0, -1)) }
+        if (!tr[i].text) { const msg = e.name === 'AbortError' ? 'Остановлено' : `Не смог ответить: ${e.message || 'ошибка'}`; tr[i].text = msg; upd((ts) => { const a = [...ts]; a[i] = { ...a[i], text: msg }; return a }) }
         throw e
       }
     }
@@ -305,7 +352,13 @@ export default function Cabinet() {
         add({ who: 'mod', kind: 'src', text: `Из книги взято: ${r.used.join('; ')}` })
       }
       await say('mod', 'mod', M_INTRO)
-      for (const a of ids) await say(a.id, 'adv', `${a.p}\n${RULE}`)
+      if (fast) {
+        const upto = tr.length
+        const res = await Promise.allSettled(ids.map((a) => say(a.id, 'adv', `${a.p}\n${RULE}`, upto)))
+        const bad = res.find((r) => r.status === 'rejected')
+        if (bad && ac.signal.aborted) throw bad.reason
+        if (bad) setErr(bad.reason.message)
+      } else for (const a of ids) await say(a.id, 'adv', `${a.p}\n${RULE}`)
       await say('mod', 'sum', M_SUM)
     } catch (e) { if (e.name !== 'AbortError') setErr(e.message || 'Сбой сети') }
     setSpeaking(''); setBusy(false)
@@ -350,6 +403,9 @@ export default function Cabinet() {
         <option value="auto">Авто: модели меняются сами</option>
         {models.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
       </select>
+      <button className="ghost" aria-pressed={fast} disabled={busy} onClick={() => setFast((f) => !f)} title="Все сразу быстрее, по очереди эксперты отвечают друг другу">{fast ? '⚡ Все сразу' : '⛓ По очереди'}</button>
+      <select value={theme} onChange={(e) => setTheme(e.target.value)} aria-label="Фон">{THEMES.map(([v, n]) => <option key={v} value={v}>{n}</option>)}</select>
+      <label className="ghost file" title="Загрузить свою картинку для фона" aria-label="Загрузить свою картинку для фона">🖼<input type="file" accept="image/*" hidden onChange={onBg} /></label>
       {cur && <button className="ghost" onClick={() => setShowRev((v) => !v)} aria-pressed={showRev}>Рецензии мастеров</button>}
       <a href="#" className="ghost">На главную</a>
       <button className="ghost" onClick={logout}>Выйти</button>
@@ -418,19 +474,21 @@ export default function Cabinet() {
         {showRev && (
           <aside className="rev">
             <h2>Рецензии мастеров</h2>
-            <p className="muted small">Короткие комментарии в духе разных творческих подходов. Это ИИ-имитация, а не мнение реальных авторов.</p>
+            <p className="muted small">Нажмите на нужного мастера, и он напишет короткую рецензию в духе своего подхода. Это ИИ-имитация, а не мнение реальных авторов.</p>
             <textarea rows={3} value={revQ} onChange={(e) => setRevQ(e.target.value)} placeholder="Что рецензировать: «глава 5» или вставьте отрывок. Пусто: возьмём по вашему последнему вопросу" aria-label="Что рецензировать" />
-            <button className="go" disabled={busy || !models.length} onClick={runReview}>Получить рецензии</button>
             {cur.revSrc && <p className="muted small">Взято: {cur.revSrc}</p>}
-            {MASTERS.map((m) => {
+            {masters.map((m) => {
               const r = cur.reviews?.[m.id]
-              return r && (
+              return (
                 <article key={m.id} className="card rv" style={{ '--c': m.c }}>
-                  <h3><Av w={m} />{m.n}{r.m && <small className="mdl">{r.m.split('/').pop().replace(':free', '')}</small>}</h3>
-                  <p>{r.text}{busy && speaking === m.id && <span className="cur" />}</p>
+                  <button type="button" className="mbtn" disabled={busy || (m.id === 'mc' && !custom.trim())} onClick={() => runReview(m)}>
+                    <Av w={m} />{m.n}<small className="mdl">{r ? 'ещё раз' : 'получить рецензию'}</small>
+                  </button>
+                  {r && <p>{r.text}{busy && speaking === m.id && <span className="cur" />}{r.m && <small className="mdl2">{r.m.split('/').pop().replace(':free', '')}</small>}</p>}
                 </article>
               )
             })}
+            <textarea rows={2} value={custom} onChange={(e) => setCustom(e.target.value)} placeholder="Свой мастер: опишите подход (например: короткие фразы, юмор, упор на диалоги)" aria-label="Подход своего мастера" />
           </aside>
         )}
         <div className="col">
@@ -450,7 +508,7 @@ export default function Cabinet() {
       {err && <p className="err" role="alert">{err}</p>}
       <div className="ask">
         {busy ? (
-          <div className="row"><span className="say"><i />Сейчас говорит: {who(speaking)?.n}</span><button className="go" onClick={() => ctl.current?.abort()}>Стоп</button></div>
+          <div className="row"><span className="say"><i />Сейчас говорит: {speaking === 'all' ? 'все сразу' : who(speaking)?.n}</span><button className="go" onClick={() => ctl.current?.abort()}>Стоп</button></div>
         ) : (
           <form onSubmit={ask}>
             {lib.length > 0 && (
