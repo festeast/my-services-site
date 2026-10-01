@@ -93,3 +93,5 @@ body[data-cab-theme=custom]{background:linear-gradient(rgba(6,18,31,.55),rgba(6,
 .set summary{cursor:pointer;color:var(--muted)}
 .set>*{margin-top:.5rem}
 .set p{margin-bottom:.3rem}
+.set .usage{padding:0;border:0}
+.ghost.warn{border-color:#ffb84d;color:#ffb84d}
