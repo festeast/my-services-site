@@ -95,7 +95,10 @@ function hit(id, raw) {
   ls.set('cab_hit', h); onUsage()
 }
 const hits = () => Object.entries(ls.get('cab_hit', {})).filter(([, v]) => v.until > Date.now()).map(([id, v]) => ({ id, daily: v.daily }))
-const alive = (ids) => { const h = hits().map((x) => x.id), a = ids.filter((i) => !h.includes(i)); return a.length ? a : ids }
+// Модели, которые не подходят для обычного чата (ошибки 400/403/404 или «только для агентов»), отключаются на 7 дней.
+const markBad = (id) => { const b = ls.get('cab_bad', {}); b[id] = Date.now() + 6048e5; ls.set('cab_bad', b); onUsage() }
+const isBad = (id) => (ls.get('cab_bad', {})[id] || 0) > Date.now()
+const alive = (ids) => { const h = hits().map((x) => x.id), ok = ids.filter((i) => !isBad(i)), a = ok.filter((i) => !h.includes(i)); return a.length ? a : ok }
 const short = (id) => id.split('/').pop().replace(':free', '')
 function UsageBar({ cap }) {
   const n = used(), pct = Math.min(100, Math.round((n / cap) * 100)), out = hits()
@@ -211,7 +214,7 @@ export default function Cabinet() {
     fetch(`${API}/models`).then((r) => r.json()).then((j) => {
       const free = (j.data || []).filter((m) => m.id.endsWith(':free')).sort((a, b) => (b.context_length || 0) - (a.context_length || 0)).map((m) => ({ id: m.id, name: m.name || m.id }))
       setModels(free)
-      setModel((m) => (m === 'auto' || free.some((x) => x.id === m) ? m : 'auto'))
+      setModel((m) => (m === 'auto' || (free.some((x) => x.id === m) && !isBad(m)) ? m : 'auto'))
     }).catch(() => setErr('Не удалось загрузить список бесплатных моделей.'))
   }, [])
   useEffect(() => { if (!busy) ls.set('cab_sessions', sessions.slice(0, 30)) }, [sessions, busy])
@@ -300,7 +303,7 @@ export default function Cabinet() {
     const auto = model === 'auto'
     const st = stat()
     const list = auto ? alive(models.map((m) => m.id)).sort((a, b) => (st[a]?.t ?? 6000) - (st[b]?.t ?? 6000)).slice(0, 4) : [model]
-    if (!list.length) throw new Error('Список бесплатных моделей пока не загрузился.')
+    if (!list.length) throw new Error('Нет доступных бесплатных моделей: список не загрузился или все отключены.')
     const from = auto ? rot.current++ : 0
     let last
     for (let k = 0; k < list.length; k++) {
@@ -315,7 +318,9 @@ export default function Cabinet() {
         if (signal.aborted || e.status === 401) throw e
         note(id, false)
         if (e.status === 429) hit(id, e.raw)
-        last = e.name === 'AbortError' ? new Error('Модель слишком долго молчит.') : e
+        const unfit = [400, 403, 404, 422].includes(e.status) || /harness|agentic|no endpoints|unsupported/i.test(`${e.raw || ''} ${e.message}`)
+        if (unfit) { markBad(id); if (!auto) setModel('auto') }
+        last = unfit ? new Error(`Модель ${short(id)} не подходит для обычного чата, я её отключил.`) : e.name === 'AbortError' ? new Error('Модель слишком долго молчит.') : e
       }
     }
     throw last
@@ -431,7 +436,7 @@ export default function Cabinet() {
       {cur && <h1 className="ttl">{cur.title}</h1>}
       <select value={model} onChange={(e) => setModel(e.target.value)} aria-label="Бесплатная модель ИИ" disabled={busy}>
         <option value="auto">Авто: модели меняются сами</option>
-        {models.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+        {models.filter((m) => !isBad(m.id)).map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
       </select>
       <button className="ghost" aria-pressed={fast} disabled={busy} onClick={() => setFast((f) => !f)} title="Все сразу быстрее, по очереди эксперты отвечают друг другу">{fast ? '⚡ Все сразу' : '⛓ По очереди'}</button>
       <select value={theme} onChange={(e) => setTheme(e.target.value)} aria-label="Фон">{THEMES.map(([v, n]) => <option key={v} value={v}>{n}</option>)}</select>
