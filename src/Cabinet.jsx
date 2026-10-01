@@ -13,12 +13,9 @@ const MOD = { n: 'Модератор', c: '#f5e6a8', icon: '🎙️' }
 const ME = { n: 'Вы', c: '#8fb0c9', icon: '🙂' }
 // Рецензенты описаны творческим подходом, а не именами реальных людей. Чтобы заменить значок на картинку, добавьте поле img: '/avatars/имя.png'.
 const MASTERS = [
-  { id: 'm1', n: 'Мастер лаконичной прозы', c: '#9ad0ff', icon: '🧊', p: 'Твой подход: предельная краткость, подтекст по принципу айсберга, ни одного лишнего слова и объяснения.' },
-  { id: 'm2', n: 'Мастер саспенса', c: '#ff7a59', icon: '🕯️', p: 'Твой подход: напряжение, высокие ставки героя, крючки в конце сцен, страх неизвестного внутри обыденного.' },
-  { id: 'm3', n: 'Мастер психологического романа', c: '#b48cff', icon: '🪞', p: 'Твой подход: внутренний мир героя, мотивы, моральный выбор, правдивость каждого поступка.' },
-  { id: 'm4', n: 'Мастер научной фантастики', c: '#19e3d1', icon: '🚀', p: 'Твой подход: допущение «что если», последовательные следствия, идея важнее эффектов, социальная притча.' },
-  { id: 'm5', n: 'Мастер исторической эпопеи', c: '#c99a3b', icon: '🏛️', p: 'Твой подход: масштаб эпохи, судьба народа через судьбы людей, достоверная деталь, неспешный размах.' },
-  { id: 'm6', n: 'Мастер остросюжетной прозы', c: '#7be36b', icon: '⚡', p: 'Твой подход: динамика, короткие главы, чёткий конфликт, читатель не должен оторваться.' },
+  { id: 'm19', n: 'Мастер XIX века', c: '#c99a3b', icon: '🕰️', p: 'Твой подход: классический реализм XIX века. Широкая картина общества, психологизм, нравственный выбор героя, неспешное подробное повествование, характеры важнее приключений.' },
+  { id: 'm20', n: 'Мастер XX века', c: '#9ad0ff', icon: '🎞️', p: 'Твой подход: литература XX века. Подтекст и лаконизм, эксперименты с формой, антиутопия и социальная фантастика-притча, идея важнее эффектов, читатель достраивает недосказанное.' },
+  { id: 'm21', n: 'Мастер XXI века', c: '#19e3d1', icon: '📱', p: 'Твой подход: современная сетевая проза. Быстрый темп, короткие главы, крючки в конце, кинематографичность, смешение жанров, внимание к читателю платформы и серии.' },
 ]
 const REVIEW_RULE = 'Напиши короткую рецензию-комментарий в духе этого подхода и по его логике. Это ИИ-имитация творческого подхода, а не реальный человек: не называй себя настоящим автором и не приписывай себе чужих цитат. От первого лица, 3-4 предложения, не больше 70 слов: что в тексте работает по твоим принципам, что нет, один главный совет. Отвечай по-русски.'
 const who = (id) => (id === 'me' ? ME : id === 'mod' ? MOD : id === 'mc' ? CUSTOM : ADV.find((a) => a.id === id) || MASTERS.find((a) => a.id === id))
@@ -87,6 +84,29 @@ function pickPassages(docs, query) {
   return { text: out.slice(0, 14000), used }
 }
 
+const day = () => new Date().toISOString().slice(0, 10)
+let onUsage = () => {}
+function bump() { const u = ls.get('cab_used', {}); ls.set('cab_used', { d: day(), n: (u.d === day() ? u.n : 0) + 1 }); onUsage() }
+const used = () => { const u = ls.get('cab_used', {}); return u.d === day() ? u.n : 0 }
+function hit(id, raw) {
+  const daily = /day|daily|сут/i.test(raw || '')
+  const h = ls.get('cab_hit', {})
+  h[id] = { until: daily ? Date.parse(day()) + 864e5 : Date.now() + 60000, daily }
+  ls.set('cab_hit', h); onUsage()
+}
+const hits = () => Object.entries(ls.get('cab_hit', {})).filter(([, v]) => v.until > Date.now()).map(([id, v]) => ({ id, daily: v.daily }))
+const alive = (ids) => { const h = hits().map((x) => x.id), a = ids.filter((i) => !h.includes(i)); return a.length ? a : ids }
+const short = (id) => id.split('/').pop().replace(':free', '')
+function UsageBar({ cap }) {
+  const n = used(), pct = Math.min(100, Math.round((n / cap) * 100)), out = hits()
+  return (
+    <div className="usage" role="status">
+      <span>Запросов сегодня: {n} из ~{cap} ({pct}%)</span>
+      <span className="bar" aria-hidden="true"><i style={{ width: `${pct}%` }} /></span>
+      {out.length > 0 && <span className="out">Лимит исчерпан: {out.map((o) => `${short(o.id)} (${o.daily ? 'до завтра' : 'на минуту'})`).join(', ')}</span>}
+    </div>
+  )
+}
 const THEMES = [['aurora', 'Северное сияние'], ['sakura', 'Аниме: сакура'], ['neon', 'Аниме: неон-город'], ['fantasy', 'Фэнтези'], ['scifi', 'Фантастика'], ['history', 'Историческая проза'], ['noir', 'Детектив'], ['custom', 'Своя картинка']]
 const CUSTOM = { id: 'mc', n: 'Свой мастер', c: '#ffd166', icon: '🧭' }
 // Скорость моделей запоминается: быстрые и стабильные уходят в начало очереди «Авто».
@@ -97,6 +117,7 @@ function note(id, ok, ms) {
   st[id] = r; ls.set('cab_stats', st)
 }
 async function stream(key, model, prompt, onText, signal, ttf = 0) {
+  bump()
   const ac = new AbortController()
   const fwd = () => ac.abort()
   signal?.addEventListener('abort', fwd)
@@ -112,7 +133,7 @@ async function streamRaw(key, model, prompt, onText, signal) {
   })
   if (!res.ok) {
     const j = await res.json().catch(() => ({}))
-    throw Object.assign(new Error(res.status === 401 ? 'Ключ не принят. Выйдите и введите заново.' : res.status === 429 ? 'Лимит бесплатной модели исчерпан. Выберите другую модель или подождите.' : j.error?.message || `Ошибка ${res.status}`), { status: res.status })
+    throw Object.assign(new Error(res.status === 401 ? 'Ключ не принят. Выйдите и введите заново.' : res.status === 429 ? 'Лимит бесплатной модели исчерпан. Выберите другую модель или подождите.' : j.error?.message || `Ошибка ${res.status}`), { status: res.status, raw: JSON.stringify(j.error || {}) })
   }
   const reader = res.body.getReader(), dec = new TextDecoder()
   let buf = '', acc = ''
@@ -173,6 +194,13 @@ export default function Cabinet() {
   const [fast, setFast] = useState(() => ls.get('cab_fast', true))
   const [theme, setTheme] = useState(() => ls.get('cab_theme', 'aurora'))
   const [custom, setCustom] = useState(() => ls.get('cab_custom', ''))
+  const [, setTick] = useState(0)
+  const [cap, setCap] = useState(50)
+  useEffect(() => { onUsage = () => setTick((t) => t + 1); return () => { onUsage = () => {} } }, [])
+  useEffect(() => {
+    if (!key) return
+    fetch(`${API}/key`, { headers: { Authorization: `Bearer ${key}` } }).then((r) => r.json()).then((j) => { if (j.data) setCap(j.data.is_free_tier === false ? 1000 : 50) }).catch(() => {})
+  }, [key])
   const [showRev, setShowRev] = useState(() => innerWidth > 800)
   const [revQ, setRevQ] = useState('')
   const cur = sessions.find((s) => s.id === sid)
@@ -271,7 +299,7 @@ export default function Cabinet() {
   async function streamAuto(prompt, onText, signal, onModel) {
     const auto = model === 'auto'
     const st = stat()
-    const list = auto ? models.map((m) => m.id).sort((a, b) => (st[a]?.t ?? 6000) - (st[b]?.t ?? 6000)).slice(0, 4) : [model]
+    const list = auto ? alive(models.map((m) => m.id)).sort((a, b) => (st[a]?.t ?? 6000) - (st[b]?.t ?? 6000)).slice(0, 4) : [model]
     if (!list.length) throw new Error('Список бесплатных моделей пока не загрузился.')
     const from = auto ? rot.current++ : 0
     let last
@@ -286,6 +314,7 @@ export default function Cabinet() {
       } catch (e) {
         if (signal.aborted || e.status === 401) throw e
         note(id, false)
+        if (e.status === 429) hit(id, e.raw)
         last = e.name === 'AbortError' ? new Error('Модель слишком долго молчит.') : e
       }
     }
@@ -396,6 +425,7 @@ export default function Cabinet() {
   }
 
   const top = (
+    <>
     <header>
       {cur ? <button className="ghost" disabled={busy} onClick={() => setSid(null)}>← К началу</button> : <h1>Кабинет автора</h1>}
       {cur && <h1 className="ttl">{cur.title}</h1>}
@@ -410,6 +440,8 @@ export default function Cabinet() {
       <a href="#" className="ghost">На главную</a>
       <button className="ghost" onClick={logout}>Выйти</button>
     </header>
+    <UsageBar cap={cap} />
+    </>
   )
 
   if (!cur) {
@@ -474,7 +506,7 @@ export default function Cabinet() {
         {showRev && (
           <aside className="rev">
             <h2>Рецензии мастеров</h2>
-            <p className="muted small">Нажмите на нужного мастера, и он напишет короткую рецензию в духе своего подхода. Это ИИ-имитация, а не мнение реальных авторов.</p>
+            <p className="muted small">Нажмите на нужного мастера, чтобы получить короткую рецензию.</p>
             <textarea rows={3} value={revQ} onChange={(e) => setRevQ(e.target.value)} placeholder="Что рецензировать: «глава 5» или вставьте отрывок. Пусто: возьмём по вашему последнему вопросу" aria-label="Что рецензировать" />
             {cur.revSrc && <p className="muted small">Взято: {cur.revSrc}</p>}
             {masters.map((m) => {
@@ -489,6 +521,7 @@ export default function Cabinet() {
               )
             })}
             <textarea rows={2} value={custom} onChange={(e) => setCustom(e.target.value)} placeholder="Свой мастер: опишите подход (например: короткие фразы, юмор, упор на диалоги)" aria-label="Подход своего мастера" />
+            <p className="muted small foot">Рецензии пишет ИИ: он только имитирует творческий подход эпохи, а не высказывает точное мнение каких-либо реальных людей.</p>
           </aside>
         )}
         <div className="col">
