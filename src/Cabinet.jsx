@@ -99,7 +99,7 @@ const hits = () => Object.entries(ls.get('cab_hit', {})).filter(([, v]) => v.unt
 const markBad = (id) => { const b = ls.get('cab_bad', {}); b[id] = Date.now() + 6048e5; ls.set('cab_bad', b); onUsage() }
 const isBad = (id) => (ls.get('cab_bad', {})[id] || 0) > Date.now()
 const alive = (ids) => { const h = hits().map((x) => x.id), ok = ids.filter((i) => !isBad(i)), a = ok.filter((i) => !h.includes(i)); return a.length ? a : ok }
-const short = (id) => id.split('/').pop().replace(':free', '')
+const short = (id) => id.split('/').pop().replace(':free', '') + (id.endsWith(':free') ? '' : ' 💳')
 function UsageBar({ cap }) {
   const n = used(), pct = Math.min(100, Math.round((n / cap) * 100)), out = hits()
   return (
@@ -120,7 +120,8 @@ function note(id, ok, ms) {
   st[id] = r; ls.set('cab_stats', st)
 }
 async function stream(key, model, prompt, onText, signal, ttf = 0) {
-  bump()
+  if (model.endsWith(':free')) bump()
+  else { ls.set('cab_paidn', ls.get('cab_paidn', 0) + 1); onUsage() }
   const ac = new AbortController()
   const fwd = () => ac.abort()
   signal?.addEventListener('abort', fwd)
@@ -136,7 +137,7 @@ async function streamRaw(key, model, prompt, onText, signal) {
   })
   if (!res.ok) {
     const j = await res.json().catch(() => ({}))
-    throw Object.assign(new Error(res.status === 401 ? 'Ключ не принят. Выйдите и введите заново.' : res.status === 429 ? 'Лимит бесплатной модели исчерпан. Выберите другую модель или подождите.' : j.error?.message || `Ошибка ${res.status}`), { status: res.status, raw: JSON.stringify(j.error || {}) })
+    throw Object.assign(new Error(res.status === 401 ? 'Ключ не принят. Выйдите и введите заново.' : res.status === 429 ? 'Лимит бесплатной модели исчерпан. Выберите другую модель или подождите.' : res.status === 402 ? 'Не хватает баланса на OpenRouter. Пополните его или выключите платные запросы.' : j.error?.message || `Ошибка ${res.status}`), { status: res.status, raw: JSON.stringify(j.error || {}) })
   }
   const reader = res.body.getReader(), dec = new TextDecoder()
   let buf = '', acc = ''
@@ -199,6 +200,12 @@ export default function Cabinet() {
   const [custom, setCustom] = useState(() => ls.get('cab_custom', ''))
   const [, setTick] = useState(0)
   const [cap, setCap] = useState(50)
+  const [paid, setPaid] = useState([])
+  const [usePaid, setUsePaid] = useState(() => ls.get('cab_usepaid', false))
+  const [paidModel, setPaidModel] = useState(() => ls.get('cab_paidm', ''))
+  const [capMan, setCapMan] = useState(() => ls.get('cab_capman', 'auto'))
+  const capEff = capMan === 'auto' ? cap : +capMan
+  useEffect(() => { ls.set('cab_usepaid', usePaid); ls.set('cab_paidm', paidModel); ls.set('cab_capman', capMan) }, [usePaid, paidModel, capMan])
   useEffect(() => { onUsage = () => setTick((t) => t + 1); return () => { onUsage = () => {} } }, [])
   useEffect(() => {
     if (!key) return
@@ -214,6 +221,7 @@ export default function Cabinet() {
     fetch(`${API}/models`).then((r) => r.json()).then((j) => {
       const free = (j.data || []).filter((m) => m.id.endsWith(':free')).sort((a, b) => (b.context_length || 0) - (a.context_length || 0)).map((m) => ({ id: m.id, name: m.name || m.id }))
       setModels(free)
+      setPaid((j.data || []).filter((m) => !m.id.endsWith(':free') && +m.pricing?.prompt > 0 && +m.pricing?.completion > 0 && (m.context_length || 0) >= 16000).map((m) => ({ id: m.id, name: m.name || m.id, c: (+m.pricing.prompt + +m.pricing.completion) * 1e6 })).sort((a, b) => a.c - b.c).slice(0, 15))
       setModel((m) => (m === 'auto' || (free.some((x) => x.id === m) && !isBad(m)) ? m : 'auto'))
     }).catch(() => setErr('Не удалось загрузить список бесплатных моделей.'))
   }, [])
@@ -302,10 +310,15 @@ export default function Cabinet() {
   async function streamAuto(prompt, onText, signal, onModel) {
     const auto = model === 'auto'
     const st = stat()
+    const paidOn = usePaid && paidModel
+    const goPaid = () => { onModel(paidModel); return stream(key, paidModel, prompt, onText, signal, 0) }
+    if (paidOn && used() >= capEff) return goPaid()
     const list = auto ? alive(models.map((m) => m.id)).sort((a, b) => (st[a]?.t ?? 6000) - (st[b]?.t ?? 6000)).slice(0, 4) : [model]
+    if (!list.length && paidOn) return goPaid()
     if (!list.length) throw new Error('Нет доступных бесплатных моделей: список не загрузился или все отключены.')
     const from = auto ? rot.current++ : 0
     let last
+    let lim = false
     for (let k = 0; k < list.length; k++) {
       const id = list[(from + k) % list.length], t0 = Date.now()
       try {
@@ -317,12 +330,13 @@ export default function Cabinet() {
       } catch (e) {
         if (signal.aborted || e.status === 401) throw e
         note(id, false)
-        if (e.status === 429) hit(id, e.raw)
+        if (e.status === 429) { hit(id, e.raw); lim = true }
         const unfit = [400, 403, 404, 422].includes(e.status) || /harness|agentic|no endpoints|unsupported/i.test(`${e.raw || ''} ${e.message}`)
         if (unfit) { markBad(id); if (!auto) setModel('auto') }
         last = unfit ? new Error(`Модель ${short(id)} не подходит для обычного чата, я её отключил.`) : e.name === 'AbortError' ? new Error('Модель слишком долго молчит.') : e
       }
     }
+    if (paidOn && lim) return goPaid()
     throw last
   }
   async function loadDocs(ids) {
@@ -445,7 +459,16 @@ export default function Cabinet() {
       <a href="#" className="ghost">На главную</a>
       <button className="ghost" onClick={logout}>Выйти</button>
     </header>
-    <UsageBar cap={cap} />
+    <UsageBar cap={capEff} />
+    <details className="set">
+      <summary>Платные запросы и лимит{ls.get('cab_paidn', 0) > 0 ? ` · платных запросов: ${ls.get('cab_paidn', 0)}` : ''}</summary>
+      <label className="chk"><input type="checkbox" checked={usePaid} disabled={!paidModel} onChange={(e) => setUsePaid(e.target.checked)} /> Когда бесплатный лимит исчерпан, использовать платную модель (деньги спишутся с баланса OpenRouter)</label>
+      <div className="row">
+        <select value={paidModel} onChange={(e) => setPaidModel(e.target.value)} aria-label="Платная модель"><option value="">Выберите платную модель…</option>{paid.map((m) => <option key={m.id} value={m.id}>{m.name} · ${m.c.toFixed(2)}/1М</option>)}</select>
+        <select value={capMan} onChange={(e) => setCapMan(e.target.value)} aria-label="Дневной лимит бесплатных запросов"><option value="auto">Лимит: определить сам</option><option value="50">Лимит: 50 в день</option><option value="1000">Лимит: 1000 в день</option></select>
+      </div>
+      <p className="muted small">Цена за миллион токенов (вход и выход вместе). Платная модель включается только после отказа бесплатных, её ответы помечены 💳.</p>
+    </details>
     </>
   )
 
@@ -521,7 +544,7 @@ export default function Cabinet() {
                   <button type="button" className="mbtn" disabled={busy || (m.id === 'mc' && !custom.trim())} onClick={() => runReview(m)}>
                     <Av w={m} />{m.n}<small className="mdl">{r ? 'ещё раз' : 'получить рецензию'}</small>
                   </button>
-                  {r && <p>{r.text}{busy && speaking === m.id && <span className="cur" />}{r.m && <small className="mdl2">{r.m.split('/').pop().replace(':free', '')}</small>}</p>}
+                  {r && <p>{r.text}{busy && speaking === m.id && <span className="cur" />}{r.m && <small className="mdl2">{short(r.m)}</small>}</p>}
                 </article>
               )
             })}
@@ -537,7 +560,7 @@ export default function Cabinet() {
           const live = busy && speaking === t.who && i === cur.turns.length - 1
           return (
             <article key={i} className={`card ${t.kind}`} style={{ '--c': w.c }}>
-              <h3><Av w={w} />{w.n}{t.kind === 'sum' && ' · вывод сеанса'}{t.m && <small className="mdl">{t.m.split('/').pop().replace(':free', '')}</small>}</h3>
+              <h3><Av w={w} />{w.n}{t.kind === 'sum' && ' · вывод сеанса'}{t.m && <small className="mdl">{short(t.m)}</small>}</h3>
               <p>{t.text}{live && <span className="cur" />}</p>
             </article>
           )
