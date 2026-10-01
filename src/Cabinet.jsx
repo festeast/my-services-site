@@ -200,6 +200,7 @@ export default function Cabinet() {
   const [custom, setCustom] = useState(() => ls.get('cab_custom', ''))
   const [, setTick] = useState(0)
   const [cap, setCap] = useState(50)
+  const [showSet, setShowSet] = useState(false)
   const [paid, setPaid] = useState([])
   const [usePaid, setUsePaid] = useState(() => ls.get('cab_usepaid', false))
   const [paidModel, setPaidModel] = useState(() => ls.get('cab_paidm', ''))
@@ -214,6 +215,7 @@ export default function Cabinet() {
   const [showRev, setShowRev] = useState(() => innerWidth > 800)
   const [revQ, setRevQ] = useState('')
   const cur = sessions.find((s) => s.id === sid)
+  const warn = used() >= capEff * 0.9 || hits().length > 0
   const masters = [...MASTERS, { ...CUSTOM, p: `Твой подход: ${custom}` }]
 
   useEffect(() => { document.title = 'Кабинет автора' }, [])
@@ -452,6 +454,7 @@ export default function Cabinet() {
         <option value="auto">Авто: модели меняются сами</option>
         {models.filter((m) => !isBad(m.id)).map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
       </select>
+      <button className={`ghost pill${warn ? ' warn' : ''}`} aria-expanded={showSet} onClick={() => setShowSet((v) => !v)} title="Лимиты и платные запросы">⚙ {used()}/{capEff}</button>
       <button className="ghost" aria-pressed={fast} disabled={busy} onClick={() => setFast((f) => !f)} title="Все сразу быстрее, по очереди эксперты отвечают друг другу">{fast ? '⚡ Все сразу' : '⛓ По очереди'}</button>
       <select value={theme} onChange={(e) => setTheme(e.target.value)} aria-label="Фон">{THEMES.map(([v, n]) => <option key={v} value={v}>{n}</option>)}</select>
       <label className="ghost file" title="Загрузить свою картинку для фона" aria-label="Загрузить свою картинку для фона">🖼<input type="file" accept="image/*" hidden onChange={onBg} /></label>
@@ -459,16 +462,18 @@ export default function Cabinet() {
       <a href="#" className="ghost">На главную</a>
       <button className="ghost" onClick={logout}>Выйти</button>
     </header>
-    <UsageBar cap={capEff} />
-    <details className="set">
-      <summary>Платные запросы и лимит{ls.get('cab_paidn', 0) > 0 ? ` · платных запросов: ${ls.get('cab_paidn', 0)}` : ''}</summary>
+    {showSet && (
+    <div className="set">
+      <UsageBar cap={capEff} />
+      <p className="muted small">Платных запросов: {ls.get('cab_paidn', 0)}</p>
       <label className="chk"><input type="checkbox" checked={usePaid} disabled={!paidModel} onChange={(e) => setUsePaid(e.target.checked)} /> Когда бесплатный лимит исчерпан, использовать платную модель (деньги спишутся с баланса OpenRouter)</label>
       <div className="row">
         <select value={paidModel} onChange={(e) => setPaidModel(e.target.value)} aria-label="Платная модель"><option value="">Выберите платную модель…</option>{paid.map((m) => <option key={m.id} value={m.id}>{m.name} · ${m.c.toFixed(2)}/1М</option>)}</select>
         <select value={capMan} onChange={(e) => setCapMan(e.target.value)} aria-label="Дневной лимит бесплатных запросов"><option value="auto">Лимит: определить сам</option><option value="50">Лимит: 50 в день</option><option value="1000">Лимит: 1000 в день</option></select>
       </div>
       <p className="muted small">Цена за миллион токенов (вход и выход вместе). Платная модель включается только после отказа бесплатных, её ответы помечены 💳.</p>
-    </details>
+    </div>
+    )}
     </>
   )
 
