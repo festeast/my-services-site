@@ -84,3 +84,8 @@ body[data-cab-theme=scifi]{background:radial-gradient(circle at 75% 15%,rgba(43,
 body[data-cab-theme=history]{background:radial-gradient(circle at 80% 15%,rgba(201,154,59,.35),transparent 42%),linear-gradient(170deg,#241a10,#3a2a18)}
 body[data-cab-theme=noir]{background:radial-gradient(circle at 85% 12%,rgba(255,70,70,.22),transparent 38%),linear-gradient(180deg,#0b0b0f,#1a1a22)}
 body[data-cab-theme=custom]{background:linear-gradient(rgba(6,18,31,.55),rgba(6,18,31,.82)),var(--bgimg,none) center/cover fixed,#06121f}
+.usage{display:flex;gap:.8rem;align-items:center;flex-wrap:wrap;padding:.3rem 1rem;font-size:.8rem;color:var(--muted);border-bottom:1px solid var(--line)}
+.usage .bar{width:7rem;height:.4rem;border-radius:9px;background:var(--line);overflow:hidden}
+.usage .bar i{display:block;height:100%;background:var(--grad)}
+.usage .out{color:#ff9b9b}
+.rev .foot{margin-top:auto;padding-top:.6rem;border-top:1px solid var(--line)}
