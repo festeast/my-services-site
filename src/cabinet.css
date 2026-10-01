@@ -89,3 +89,7 @@ body[data-cab-theme=custom]{background:linear-gradient(rgba(6,18,31,.55),rgba(6,
 .usage .bar i{display:block;height:100%;background:var(--grad)}
 .usage .out{color:#ff9b9b}
 .rev .foot{margin-top:auto;padding-top:.6rem;border-top:1px solid var(--line)}
+.set{padding:.3rem 1rem;border-bottom:1px solid var(--line);font-size:.85rem}
+.set summary{cursor:pointer;color:var(--muted)}
+.set>*{margin-top:.5rem}
+.set p{margin-bottom:.3rem}
