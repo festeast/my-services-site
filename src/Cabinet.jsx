@@ -2,16 +2,27 @@ import { useEffect, useRef, useState } from 'react'
 import './cabinet.css'
 
 const ADV = [
-  { id: 'risk', n: 'Риск-менеджер', c: '#ff7a59', p: 'Ты риск-менеджер литературного проекта. Назови самый опасный риск для книги, его вероятность и конкретную меру защиты.' },
-  { id: 'edit', n: 'Редактор', c: '#2b7cff', p: 'Ты строгий редактор жанровой прозы. Оцени структуру, темп, героев или стиль и предложи одну конкретную правку.' },
-  { id: 'hist', n: 'Историк', c: '#c99a3b', p: 'Ты историк и фактчекер. Проверь достоверность деталей эпохи, техники, быта. Если не уверен в факте, скажи прямо.' },
-  { id: 'read', n: 'Читатель', c: '#19e3d1', p: 'Ты читатель платформы Автор Тудей, любитель жанра. Скажи честно, что зацепило, где заскучал бы и дочитал бы ты до конца.' },
-  { id: 'pub', n: 'Публикация', c: '#b48cff', p: 'Ты консультант по рискам публикации: правила площадок, возрастные ограничения, реальные лица и события, продвижение. Ты не юрист, по праву советуй проверить у специалиста.' },
-  { id: 'idea', n: 'Соавтор идей', c: '#7be36b', p: 'Ты креативный соавтор. Предложи один неожиданный, но логичный ход, поворот или название и коротко укажи его риск.' },
+  { id: 'risk', icon: '🛡️', n: 'Риск-менеджер', c: '#ff7a59', p: 'Ты риск-менеджер литературного проекта. Назови самый опасный риск для книги, его вероятность и конкретную меру защиты.' },
+  { id: 'edit', icon: '✒️', n: 'Редактор', c: '#2b7cff', p: 'Ты строгий редактор жанровой прозы. Оцени структуру, темп, героев или стиль и предложи одну конкретную правку.' },
+  { id: 'hist', icon: '📜', n: 'Историк', c: '#c99a3b', p: 'Ты историк и фактчекер. Проверь достоверность деталей эпохи, техники, быта. Если не уверен в факте, скажи прямо.' },
+  { id: 'read', icon: '👓', n: 'Читатель', c: '#19e3d1', p: 'Ты читатель платформы Автор Тудей, любитель жанра. Скажи честно, что зацепило, где заскучал бы и дочитал бы ты до конца.' },
+  { id: 'pub', icon: '⚖️', n: 'Публикация', c: '#b48cff', p: 'Ты консультант по рискам публикации: правила площадок, возрастные ограничения, реальные лица и события, продвижение. Ты не юрист, по праву советуй проверить у специалиста.' },
+  { id: 'idea', icon: '💡', n: 'Соавтор идей', c: '#7be36b', p: 'Ты креативный соавтор. Предложи один неожиданный, но логичный ход, поворот или название и коротко укажи его риск.' },
 ]
-const MOD = { n: 'Модератор', c: '#f5e6a8' }
-const ME = { n: 'Вы', c: '#8fb0c9' }
-const who = (id) => (id === 'me' ? ME : id === 'mod' ? MOD : ADV.find((a) => a.id === id))
+const MOD = { n: 'Модератор', c: '#f5e6a8', icon: '🎙️' }
+const ME = { n: 'Вы', c: '#8fb0c9', icon: '🙂' }
+// Рецензенты описаны творческим подходом, а не именами реальных людей. Чтобы заменить значок на картинку, добавьте поле img: '/avatars/имя.png'.
+const MASTERS = [
+  { id: 'm1', n: 'Мастер лаконичной прозы', c: '#9ad0ff', icon: '🧊', p: 'Твой подход: предельная краткость, подтекст по принципу айсберга, ни одного лишнего слова и объяснения.' },
+  { id: 'm2', n: 'Мастер саспенса', c: '#ff7a59', icon: '🕯️', p: 'Твой подход: напряжение, высокие ставки героя, крючки в конце сцен, страх неизвестного внутри обыденного.' },
+  { id: 'm3', n: 'Мастер психологического романа', c: '#b48cff', icon: '🪞', p: 'Твой подход: внутренний мир героя, мотивы, моральный выбор, правдивость каждого поступка.' },
+  { id: 'm4', n: 'Мастер научной фантастики', c: '#19e3d1', icon: '🚀', p: 'Твой подход: допущение «что если», последовательные следствия, идея важнее эффектов, социальная притча.' },
+  { id: 'm5', n: 'Мастер исторической эпопеи', c: '#c99a3b', icon: '🏛️', p: 'Твой подход: масштаб эпохи, судьба народа через судьбы людей, достоверная деталь, неспешный размах.' },
+  { id: 'm6', n: 'Мастер остросюжетной прозы', c: '#7be36b', icon: '⚡', p: 'Твой подход: динамика, короткие главы, чёткий конфликт, читатель не должен оторваться.' },
+]
+const REVIEW_RULE = 'Напиши короткую рецензию-комментарий в духе этого подхода и по его логике. Это ИИ-имитация творческого подхода, а не реальный человек: не называй себя настоящим автором и не приписывай себе чужих цитат. От первого лица, 3-4 предложения, не больше 70 слов: что в тексте работает по твоим принципам, что нет, один главный совет. Отвечай по-русски.'
+const who = (id) => (id === 'me' ? ME : id === 'mod' ? MOD : ADV.find((a) => a.id === id) || MASTERS.find((a) => a.id === id))
+const Av = ({ w, size = '' }) => <span className={`av ${size}`} style={{ '--c': w.c }} aria-hidden="true">{w.img ? <img src={w.img} alt="" /> : w.icon}</span>
 const API = 'https://openrouter.ai/api/v1'
 const RULE = 'Ответь ОЧЕНЬ коротко: 2-3 предложения, не больше 60 слов, без вступлений и списков. Только самое ценное и конкретное. Можешь коротко согласиться или возразить другому участнику по имени. Если в [Материале автора] есть фрагменты книги, опирайся на них. Отвечай по-русски.'
 const M_INTRO = 'Ты модератор обсуждения книги. В одном-двух предложениях (до 35 слов) сформулируй главный вопрос, который сейчас стоит перед экспертами, и предложи им высказаться. Отвечай по-русски.'
@@ -84,7 +95,7 @@ async function stream(key, model, prompt, onText, signal) {
   })
   if (!res.ok) {
     const j = await res.json().catch(() => ({}))
-    throw new Error(res.status === 401 ? 'Ключ не принят. Выйдите и введите заново.' : res.status === 429 ? 'Лимит бесплатной модели исчерпан. Выберите другую модель или подождите.' : j.error?.message || `Ошибка ${res.status}`)
+    throw Object.assign(new Error(res.status === 401 ? 'Ключ не принят. Выйдите и введите заново.' : res.status === 429 ? 'Лимит бесплатной модели исчерпан. Выберите другую модель или подождите.' : j.error?.message || `Ошибка ${res.status}`), { status: res.status })
   }
   const reader = res.body.getReader(), dec = new TextDecoder()
   let buf = '', acc = ''
@@ -113,7 +124,7 @@ function Chips({ pick, setPick, disabled }) {
       <button type="button" disabled={disabled} aria-pressed={all} onClick={() => setPick(all ? [] : ADV.map((a) => a.id))}>Все</button>
       {ADV.map((a) => (
         <button key={a.id} type="button" disabled={disabled} aria-pressed={pick.includes(a.id)} style={{ '--c': a.c }} onClick={() => toggle(a.id)}>
-          <i />{a.n}
+          <Av w={a} size="sm" />{a.n}
         </button>
       ))}
     </div>
@@ -125,7 +136,7 @@ export default function Cabinet() {
   const [input, setInput] = useState('')
   const [remember, setRemember] = useState(true)
   const [models, setModels] = useState([])
-  const [model, setModel] = useState(() => ls.get('cab_model', ''))
+  const [model, setModel] = useState(() => ls.get('cab_model', 'auto'))
   const [sessions, setSessions] = useState(() => ls.get('cab_sessions', []))
   const [sid, setSid] = useState(null)
   const [notes, setNotes] = useState(() => ls.get('cab_notes', ''))
@@ -141,14 +152,17 @@ export default function Cabinet() {
   const [err, setErr] = useState('')
   const ctl = useRef(null)
   const feed = useRef(null)
+  const rot = useRef(0)
+  const [showRev, setShowRev] = useState(() => innerWidth > 800)
+  const [revQ, setRevQ] = useState('')
   const cur = sessions.find((s) => s.id === sid)
 
   useEffect(() => { document.title = 'Кабинет автора' }, [])
   useEffect(() => {
     fetch(`${API}/models`).then((r) => r.json()).then((j) => {
-      const free = (j.data || []).filter((m) => m.id.endsWith(':free')).map((m) => ({ id: m.id, name: m.name || m.id }))
+      const free = (j.data || []).filter((m) => m.id.endsWith(':free')).sort((a, b) => (b.context_length || 0) - (a.context_length || 0)).map((m) => ({ id: m.id, name: m.name || m.id }))
       setModels(free)
-      setModel((m) => (free.some((x) => x.id === m) ? m : free[0]?.id || ''))
+      setModel((m) => (m === 'auto' || free.some((x) => x.id === m) ? m : 'auto'))
     }).catch(() => setErr('Не удалось загрузить список бесплатных моделей.'))
   }, [])
   useEffect(() => { if (!busy) ls.set('cab_sessions', sessions.slice(0, 30)) }, [sessions, busy])
@@ -210,6 +224,57 @@ export default function Cabinet() {
   }
   const toggleDoc = (id) => setSessions((ss) => ss.map((x) => (x.id === sid ? { ...x, docs: (x.docs || []).includes(id) ? x.docs.filter((d) => d !== id) : [...(x.docs || []), id] } : x)))
 
+  // Режим «Авто»: каждая реплика берёт следующую бесплатную модель, а при сбое или лимите пробует соседние.
+  async function streamAuto(prompt, onText, signal, onModel) {
+    const auto = model === 'auto'
+    const list = auto ? models.map((m) => m.id) : [model]
+    if (!list.length) throw new Error('Список бесплатных моделей пока не загрузился.')
+    const from = auto ? rot.current++ : 0
+    let last
+    for (let k = 0; k < (auto ? Math.min(list.length, 5) : 1); k++) {
+      const id = list[(from + k) % list.length]
+      try {
+        onModel(id)
+        const t = await stream(key, id, prompt, onText, signal)
+        if (t.trim()) return t
+        last = new Error('Модель ничего не ответила.')
+      } catch (e) {
+        if (e.name === 'AbortError' || e.status === 401) throw e
+        last = e
+      }
+    }
+    throw last
+  }
+  async function loadDocs(ids) {
+    const out = []
+    for (const d of ids || []) {
+      const m = lib.find((x) => x.id === d), t = await docGet(d).catch(() => null)
+      if (m && t) out.push({ name: m.name, text: t })
+    }
+    return out
+  }
+  async function runReview() {
+    if (busy || !cur) return
+    const id = cur.id
+    const query = revQ.trim() || [...cur.turns].reverse().find((t) => t.kind === 'q')?.text || cur.title
+    setBusy(true); setErr('')
+    const ac = new AbortController(); ctl.current = ac
+    const setR = (mid, v) => setSessions((ss) => ss.map((x) => (x.id === id ? { ...x, reviews: { ...(x.reviews || {}), [mid]: v } } : x)))
+    try {
+      const docs = await loadDocs(cur.docs)
+      const mat = docs.length ? pickPassages(docs, query) : { text: '', used: [] }
+      const target = mat.text || query
+      if (target.length < 200) throw new Error('Добавьте книгу в материалы или вставьте отрывок (от 200 знаков) в поле рецензий.')
+      setSessions((ss) => ss.map((x) => (x.id === id ? { ...x, reviews: {}, revSrc: mat.used.join('; ') } : x)))
+      for (const m of MASTERS) {
+        let cm = ''
+        setSpeaking(m.id); setR(m.id, { text: '', m: '' })
+        const prompt = `${m.p}\n${REVIEW_RULE}\n\n[О книге автора]\n${notes || 'не указано'}\n[Что рецензировать]\n${target.slice(0, 12000)}\n\nТвоя рецензия:`
+        await streamAuto(prompt, (x) => setR(m.id, { text: x, m: cm }), ac.signal, (mid) => { cm = mid })
+      }
+    } catch (e) { if (e.name !== 'AbortError') setErr(e.message || 'Сбой сети') }
+    setSpeaking(''); setBusy(false)
+  }
   async function runRound(id, question, base) {
     const ids = ADV.filter((a) => pick.includes(a.id))
     setBusy(true); setErr('')
@@ -224,7 +289,7 @@ export default function Cabinet() {
       const hist = tr.slice(Math.max(0, i - 16), i).filter((t) => t.kind !== 'src').map((t) => `${who(t.who).n}: ${t.text.slice(0, 600)}`).join('\n')
       const prompt = `${instr}\n\n[О книге автора]\n${notes || 'не указано'}\n[Материал автора]\n${material || 'нет'}\n[Ход обсуждения]\n${hist}\n\nТвоя реплика (${who(w).n}):`
       try {
-        const t = await stream(key, model, prompt, (x) => { tr[i].text = x; upd((ts) => { const a = [...ts]; a[i] = { ...a[i], text: x }; return a }) }, ac.signal)
+        const t = await streamAuto(prompt, (x) => { tr[i].text = x; upd((ts) => { const a = [...ts]; a[i] = { ...a[i], text: x }; return a }) }, ac.signal, (mid) => { tr[i].m = mid; upd((ts) => { const a = [...ts]; a[i] = { ...a[i], m: mid }; return a }) })
         if (!t.trim()) throw new Error('Модель ничего не ответила. Выберите другую модель.')
       } catch (e) {
         if (!tr[i].text) { tr.pop(); upd((ts) => ts.slice(0, -1)) }
@@ -233,11 +298,7 @@ export default function Cabinet() {
     }
     try {
       add({ who: 'me', kind: 'q', text: question })
-      const docs = []
-      for (const d of base.docs || []) {
-        const m = lib.find((x) => x.id === d), t = await docGet(d).catch(() => null)
-        if (m && t) docs.push({ name: m.name, text: t })
-      }
+      const docs = await loadDocs(base.docs)
       if (docs.length) {
         const r = pickPassages(docs, question)
         material = r.text
@@ -286,9 +347,10 @@ export default function Cabinet() {
       {cur ? <button className="ghost" disabled={busy} onClick={() => setSid(null)}>← К началу</button> : <h1>Кабинет автора</h1>}
       {cur && <h1 className="ttl">{cur.title}</h1>}
       <select value={model} onChange={(e) => setModel(e.target.value)} aria-label="Бесплатная модель ИИ" disabled={busy}>
-        {models.length === 0 && <option>Загрузка моделей…</option>}
+        <option value="auto">Авто: модели меняются сами</option>
         {models.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
       </select>
+      {cur && <button className="ghost" onClick={() => setShowRev((v) => !v)} aria-pressed={showRev}>Рецензии мастеров</button>}
       <a href="#" className="ghost">На главную</a>
       <button className="ghost" onClick={logout}>Выйти</button>
     </header>
@@ -352,6 +414,26 @@ export default function Cabinet() {
   return (
     <div className="cab">
       {top}
+      <div className="stage">
+        {showRev && (
+          <aside className="rev">
+            <h2>Рецензии мастеров</h2>
+            <p className="muted small">Короткие комментарии в духе разных творческих подходов. Это ИИ-имитация, а не мнение реальных авторов.</p>
+            <textarea rows={3} value={revQ} onChange={(e) => setRevQ(e.target.value)} placeholder="Что рецензировать: «глава 5» или вставьте отрывок. Пусто: возьмём по вашему последнему вопросу" aria-label="Что рецензировать" />
+            <button className="go" disabled={busy || !models.length} onClick={runReview}>Получить рецензии</button>
+            {cur.revSrc && <p className="muted small">Взято: {cur.revSrc}</p>}
+            {MASTERS.map((m) => {
+              const r = cur.reviews?.[m.id]
+              return r && (
+                <article key={m.id} className="card rv" style={{ '--c': m.c }}>
+                  <h3><Av w={m} />{m.n}{r.m && <small className="mdl">{r.m.split('/').pop().replace(':free', '')}</small>}</h3>
+                  <p>{r.text}{busy && speaking === m.id && <span className="cur" />}</p>
+                </article>
+              )
+            })}
+          </aside>
+        )}
+        <div className="col">
       <div className="table" ref={feed}>
         {cur.turns.map((t, i) => {
           if (t.kind === 'src') return <p key={i} className="muted srcnote">{t.text}</p>
@@ -359,7 +441,7 @@ export default function Cabinet() {
           const live = busy && speaking === t.who && i === cur.turns.length - 1
           return (
             <article key={i} className={`card ${t.kind}`} style={{ '--c': w.c }}>
-              <h3><i />{w.n}{t.kind === 'sum' && ' · вывод сеанса'}</h3>
+              <h3><Av w={w} />{w.n}{t.kind === 'sum' && ' · вывод сеанса'}{t.m && <small className="mdl">{t.m.split('/').pop().replace(':free', '')}</small>}</h3>
               <p>{t.text}{live && <span className="cur" />}</p>
             </article>
           )
@@ -387,6 +469,8 @@ export default function Cabinet() {
             </div>
           </form>
         )}
+      </div>
+        </div>
       </div>
     </div>
   )
